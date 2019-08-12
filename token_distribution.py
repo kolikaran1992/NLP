@@ -38,17 +38,33 @@ class TokenDist(object):
                  texts,
                  rev=True,
                  tokenizer=None,
-                 stops=stopwords_default):
+                 stops=stopwords_default,
+                 process_tokens = False):
         self._texts = texts
         self._rev = rev
         self._freq_dict = None
         self._tokenizer = tokenizer
+        self._process_tokens = process_tokens
         self._stops = stops
+        self._sent_toks = None
+
+    def get_sent_tokens(self, return_spans = False):
+        if self._sent_toks is None:
+
+            if self._process_tokens:
+                tokens = [self._tokenizer.tokenize(sent, return_spans=return_spans) for sent in self._texts]
+            else:
+                tokens = [self._tokenizer.gap_split(sent, return_spans=return_spans) for sent in self._texts]
+
+            self._sent_toks = tokens
+            del self._texts
+        return self._sent_toks
+
 
     def get_freq_dict(self):
         if self._freq_dict is None:
-            fd = FreqDist([tok for sent in self._texts for tok in self._tokenizer.gap_split(sent, return_spans=False)
-                           if tok.lower() not in self._stops])
+            tokens = [tok for sent_toks in self.get_sent_tokens(return_spans=False) for tok in sent_toks if tok.lower() not in self._stops]
+            fd = FreqDist(tokens)
             fd = dict(sorted([(k, v) for k, v in fd.items()], reverse=self._rev, key=lambda x: x[1]))
             self._freq_dict = fd
             return fd

@@ -61,6 +61,10 @@ class Tokenizer(object):
 
     def _process_token(self, token, idx):
         ## prefix split
+
+        if token == '':
+            return []
+
         prefix_split = [item.span() for item in re.finditer(self._regex['suffix'], token) if not (item.span()[0] == item.span()[1])]
 
         final_tok = token[prefix_split[-1][0]: prefix_split[-1][1]]
@@ -96,8 +100,8 @@ class Tokenizer(object):
             return []
         self._check_regex()
 
-        spans = list(reduce(lambda x, y: x+y,
-                            [self._process_token(text[left: right], left) for left, right in regexp_span_tokenize(text, self._regex['gap']) if not (left == right)]))
+        spans = [span for left, right in self.gap_split(text, return_spans=True) for span in self._process_token(text[left: right], left)]
+
         tokens = [text[span[0]:span[1]] for span in spans]
 
         if return_spans:
