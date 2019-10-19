@@ -1,18 +1,22 @@
+from .__common__ import LOGGER_NAME
+import logging
+logger = logging.getLogger(LOGGER_NAME)
+
 class Vocabulary(object):
     """
     --> map/reverse_map tokens to ints
-    -->
     """
 
     def __init__(self,
-                 vocab = ('the',),
-                 specials=('<pad>',)):
+                 vocab = (),
+                 specials = ('<unk>', '<pad>')):
         """
         :param vocab: tuple of all the tokens to be included in the vocabulary
         :param specials: tuple of special tokens that will be prepended to the vocabulary.
         """
-        self._token2id = {token: i for i, token in enumerate(specials)}
-        self._id2token = list(specials)
+        self._specials = list(specials)
+        self._token2id = {token: i for i, token in enumerate(self._specials+vocab)}
+        self._id2token = list(self._specials+vocab)
 
     def __len__(self):
         return len(self._token2id)
@@ -42,8 +46,7 @@ class Vocabulary(object):
         Returns:
             int: int id of token.
         """
-        token = self.process_token(token)
-        return self._token2id.get(token, len(self._token2id) - 1)
+        return self._token2id.get(token, self._token2id['<unk>'])
 
     def id_to_token(self, idx):
         """token-id to token (string).

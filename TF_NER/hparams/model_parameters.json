@@ -1,0 +1,8 @@
+{
+  "vocab_size" : 10,
+  "embedding_dimension" : 100,
+  "num_labels" : 3,
+  "rnn_layers" : [{"size" :  32, "activation": "tanh", "dropout" :  0.3}, {"size" :  32, "activation": "tanh", "dropout" :  0.3}],
+  "output_layers" : {"size": 10, "activation": "tanh", "dropout": 0.3},
+  "batch_size" : 32
+}

@@ -1,7 +1,7 @@
 from nltk import FreqDist
 from nltk.corpus import stopwords
 import plotly.graph_objs as go
-
+from collections import defaultdict
 
 stopwords_default = stopwords.words('english')
 
@@ -70,6 +70,14 @@ class TokenDist(object):
             return fd
         else:
             return self._freq_dict
+
+    def get_sent_with_toks(self, tokens):
+        relevant_sents = defaultdict(set)
+        for idx, sent_toks in enumerate(self.get_sent_tokens(return_spans=False)):
+            common = set(tokens).intersection(set(sent_toks))
+            if len(common) > 0:
+                relevant_sents[str(common)].add(idx)
+        return relevant_sents
 
     def return_go_hist(self, top_n = 30, start = 0):
         fig = go.Figure()

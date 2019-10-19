@@ -2,3 +2,7 @@ tokenizer/__pycache__/
 tokenizer/logs/
 .idea/
 __pycache__/
+keras_NER/logs/*
+!keras_NER/logs/.gitkeep
+TF_NER/logs/*
+!TF_NER/logs/.gitkeep
