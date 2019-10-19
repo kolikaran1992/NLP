@@ -1,7 +1,5 @@
 from tokenizer.__common_parameters__ import LOGGER_NAME
 
-from functools import reduce
-
 import logging
 logger = logging.getLogger(LOGGER_NAME)
 
@@ -13,7 +11,7 @@ class Tokenizer(object):
     def __init__(self,
                  prefix_re = '',
                  suffix_re = '',
-                 infix_re = '',
+                 infix_re = None,
                  gap_re = r' ',
                  flags=re.UNICODE | re.MULTILINE | re.DOTALL):
 
@@ -45,9 +43,12 @@ class Tokenizer(object):
     def _check_regex(self):
         for key in ['prefix', 'suffix', 'infix', 'gap']:
             if self._regex[key] is None:
-                self._regex[key] = re.compile(self._pattern[key], self._flags)
+                if self._pattern[key] is not None:
+                    self._regex[key] = re.compile(self._pattern[key], self._flags)
 
     def _infix_tokenizer(self, token):
+        if self._regex['infix'] is None:
+            return [(0, len(token))]
         idx = 0
         spans = []
         for item in re.finditer(self._regex['infix'], token):
