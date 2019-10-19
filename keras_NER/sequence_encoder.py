@@ -20,14 +20,17 @@ class SequenceEncoder(object):
                  path_to_w2v='',
                  path_to_label_vocab='',
                  char=False,
-                 max_tok_len=50):
+                 max_seq_len=50,
+                 max_word_len=10):
         """
         :param path_to_w2v: path to vectors (word2vec format)
         :param path_to_label_vocab: path to labels file
         :param char: whether to use characters
-        :param max_tok_len: maximum sequence length
+        :param max_seq_len: maximum sequence length
+        :param max_word_len: maximum word length
         """
-        self._max_tok_len = max_tok_len
+        self._max_seq_len = max_seq_len
+        self._max_word_len = max_word_len
 
         _temp = KeyedVectors.load_word2vec_format(path_to_w2v)
 
@@ -57,17 +60,18 @@ class SequenceEncoder(object):
         :param labels: list
         :return: named tuple
         """
-
+        tokens = self._word_vocab.pad_sequence(tokens, self._max_word_len)
         tok2ids = self._word_vocab.doc2id(tokens)
+
         char2ids = None
         lab2ids = None
-        tok2ids.extend([self._word_vocab.token_to_id('<pad>')] * (self._max_tok_len - len(tok2ids)))
+
         if labels:
             lab2ids = self._label_to_1hot.transform(np.array([labels]).reshape(-1, 1)).todense().astype(int).tolist()
-            lab2ids.extend([self._label_to_1hot.transform([['<pad>']]).todense().astype(int).tolist()[0]] * (self._max_tok_len - len(lab2ids)))
+            lab2ids.extend([self._label_to_1hot.transform([['<pad>']]).todense().astype(int).tolist()[0]] * (self._max_seq_len - len(lab2ids)))
         if self._use_char:
-            char2ids = [self._char_vocab.doc2id(list(tok)) for tok in tokens] + [
-                [self._char_vocab.token_to_id('<pad>')]] * (self._max_tok_len - len(tokens))
+            char2ids = [self._char_vocab.doc2id(self._char_vocab.pad_sequence(list(tok), self._max_word_len)) for tok in tokens] + [
+                self._char_vocab.doc2id(self._char_vocab.pad_sequence(['<pad>'], self._max_word_len))] * (self._max_seq_len - len(tokens))
 
         return encoded_seq(tok_ids=tok2ids, char_ids=char2ids, lab_ids=lab2ids)
 
