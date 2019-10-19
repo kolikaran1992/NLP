@@ -4,6 +4,8 @@ import logging
 from .__utils__ import read_label_file
 logger = logging.getLogger(LOGGER_NAME)
 from gensim.models import KeyedVectors
+import numpy as np
+from sklearn.preprocessing import OneHotEncoder
 
 from collections import namedtuple
 encoded_seq = namedtuple('EncodedSequence', 'tok_ids char_ids lab_ids')
@@ -34,8 +36,9 @@ class SequenceEncoder(object):
         logger.info('{} :: word vocabulary size = {}'.format(self.__class__.__name__, len(self._word_vocab)))
 
         labels = read_label_file(path_to_label_vocab, logger)
-        self._label_vocab = Vocabulary(vocab=labels)
-        logger.info('{} :: label vocabulary size = {}'.format(self.__class__.__name__, len(self._label_vocab)))
+        self._label_to_1hot = OneHotEncoder()
+        self._label_to_1hot.fit(np.array([labels + ['<pad>']]).reshape(-1,1))
+        logger.info('{} :: label vocabulary size = {}'.format(self.__class__.__name__, len(labels)+1))
 
         self._use_char = char
         if char:
@@ -60,9 +63,8 @@ class SequenceEncoder(object):
         lab2ids = None
         tok2ids.extend([self._word_vocab.token_to_id('<pad>')] * (self._max_tok_len - len(tok2ids)))
         if labels:
-            lab2ids = self._label_vocab.doc2id(labels)
-            lab2ids.extend([self._label_vocab.token_to_id('<pad>')] * (self._max_tok_len - len(lab2ids)))
-
+            lab2ids = self._label_to_1hot.transform(np.array([labels]).reshape(-1, 1)).todense().astype(int).tolist()
+            lab2ids.extend([self._label_to_1hot.transform([['<pad>']]).todense().astype(int).tolist()[0]] * (self._max_tok_len - len(lab2ids)))
         if self._use_char:
             char2ids = [self._char_vocab.doc2id(list(tok)) for tok in tokens] + [
                 [self._char_vocab.token_to_id('<pad>')]] * (self._max_tok_len - len(tokens))
@@ -80,7 +82,7 @@ class SequenceEncoder(object):
         :return: named tuple
         """
         tokens = self._word_vocab.id2doc(enc_seq.tok_ids)
-        labels = self._label_vocab.id2doc(enc_seq.lab_ids)
+        labels = self._label_to_1hot.inverse_transform(enc_seq.lab_ids).reshape(1,-1).tolist()[0]
 
         return decoded_seq(tokens=list(filter(lambda x: x != '<pad>', tokens)),
                            labels=list(filter(lambda x: x != '<pad>', labels)))
