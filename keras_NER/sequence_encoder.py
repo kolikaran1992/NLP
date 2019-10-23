@@ -1,11 +1,13 @@
 from .vocabulary import Vocabulary
 from .__common__ import LOGGER_NAME
 import logging
+import math
 from .__utils__ import read_label_file
 logger = logging.getLogger(LOGGER_NAME)
 from gensim.models import KeyedVectors
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
+from keras.utils import Sequence
 
 from collections import namedtuple
 encoded_seq = namedtuple('EncodedSequence', 'tok_ids char_ids lab_ids')
@@ -75,8 +77,6 @@ class SequenceEncoder(object):
 
         return encoded_seq(tok_ids=tok2ids, char_ids=char2ids, lab_ids=lab2ids)
 
-
-
     def decode(self, enc_seq):
         """
         --> named tuple containing token ids, char ids, label ids
@@ -91,3 +91,46 @@ class SequenceEncoder(object):
         return decoded_seq(tokens=list(filter(lambda x: x != '<pad>', tokens)),
                            labels=list(filter(lambda x: x != '<pad>', labels)))
 
+    def encode_multiple(self, all_tokens, all_labels=None, batch_size=32):
+        """
+        --> encode list of tokens
+        :param all_tokens: list of list
+        :param all_labels: list of list
+        :return: generator
+        """
+        if not all_labels:
+            all_labels = [None]*len(all_tokens)
+
+        ret = []
+
+        for tokens, labels in zip(all_tokens, all_labels):
+            ret.append(self.encode(tokens, labels=labels))
+
+        ret.extend(ret[:len(ret)%batch_size])
+
+        count = 0
+        items = []
+        for item in ret:
+            items.append(item)
+            count += 1
+            if count % batch_size == 0:
+                count = 0
+                yield items
+                items = []
+
+
+class NERSequence(Sequence):
+    def __init__(self, x, y, batch_size=1, preprocess=lambda *items: items):
+        self.x = x
+        self.y = y
+        self.batch_size = batch_size
+        self.preprocess = preprocess
+
+    def __getitem__(self, idx):
+        batch_x = self.x[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_y = self.y[idx * self.batch_size: (idx + 1) * self.batch_size]
+
+        return self.preprocess(batch_x, batch_y)
+
+    def __len__(self):
+        return math.ceil(len(self.x) / self.batch_size)
