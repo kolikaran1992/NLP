@@ -1,7 +1,7 @@
 import numpy as np
 from keras.callbacks import Callback
 from seqeval.metrics import f1_score, classification_report
-from .__common__ import LOGGER_NAME
+from keras_NER.__common__ import LOGGER_NAME
 import logging
 logger = logging.getLogger(LOGGER_NAME)
 

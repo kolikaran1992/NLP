@@ -1,4 +1,4 @@
-from .__common__ import LOGGER_NAME
+from keras_NER.__common__ import LOGGER_NAME
 import logging
 
 logger = logging.getLogger(LOGGER_NAME)

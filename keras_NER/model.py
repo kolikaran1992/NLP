@@ -2,9 +2,11 @@ from keras.layers import Dense, LSTM, Bidirectional, Embedding, Input, Dropout, 
 from keras.layers.merge import Concatenate
 from keras.models import Model
 from keras_contrib.layers import CRF
-from .__common__ import DTYPE, LOGGER_NAME
+from keras_contrib.losses import crf_loss
+from keras_NER.__common__ import DTYPE, LOGGER_NAME
 import logging
 logger = logging.getLogger(LOGGER_NAME)
+from copy import deepcopy
 
 class BiLSTMCRF(object):
     """
@@ -12,8 +14,149 @@ class BiLSTMCRF(object):
     """
 
     def __init__(self,
-                 num_labels,
-                 word_vocab_size,
+                max_seq_len=50,
+                max_tok_len=20,
+                tok_emb_dim=64,
+                char_emb_dim=16,
+                char_lvl_tok_emb_dim=32,
+                char_vocab_size=26,
+                tok_vocab_size=1000,
+                lstm_size=256,
+                use_char=True,
+                tok_emb=None,
+                dropout=0.3,
+                use_crf=True,
+                num_labels=12,
+                optimizer='adam'
+        ):
+        """
+        --> Build a Bi-LSTM CRF model.
+
+        """
+        super(BiLSTMCRF).__init__()
+        self._max_seq_len = max_seq_len
+        self._max_tok_len = max_tok_len
+        self._tok_emb_dim = tok_emb_dim
+        self._char_emb_dim = char_emb_dim
+        self._char_lvl_tok_emb_dim = char_lvl_tok_emb_dim
+        self._char_vocab_size = char_vocab_size
+        self._tok_vocab_size = tok_vocab_size
+        self._lstm_units = lstm_size
+        self._use_char = use_char
+        self._tok_emb = tok_emb
+        self._dropout = dropout
+        self._fully_connected_dim = 512
+        self._fully_connected_act = 'tanh'
+        self._use_crf = use_crf
+        self._num_labels = num_labels
+        self._optimizer = optimizer
+
+        self._model = None
+        self._loss = None
+
+    def _get_embedding(self):
+        """
+        --> return embedding layer
+        :return: embedding
+        """
+        tok_ids = Input(shape=(self._max_seq_len,), dtype=DTYPE['int'], name='input_tokens')
+        inputs = [tok_ids]
+        if self._tok_emb is None:
+            tok_emb = Embedding(input_dim=self._tok_vocab_size,
+                                        output_dim=self._tok_emb_dim,
+                                        mask_zero=True,
+                                        name='token_embedding')(tok_ids)
+            logger.info('{} :: initializing word embedding with random weights'.format(self.__class__.__name__))
+        else:
+            tok_emb = Embedding(input_dim=self._tok_emb.shape[0],
+                                        output_dim=self._tok_emb.shape[1],
+                                        mask_zero=True,
+                                        weights=[self._tok_emb],
+                                        name='token_embedding')(tok_ids)
+            logger.info('{} :: initializing word embedding with the weights provided'.format(self.__class__.__name__))
+
+        # build character based word embedding
+        if self._use_char:
+            char_ids = Input(shape=(self._max_seq_len, self._max_tok_len,),
+                             dtype=DTYPE['int'], name='char_input')
+            inputs.append(char_ids)
+            char_emb = Embedding(input_dim=self._char_vocab_size,
+                                        output_dim=self._char_emb_dim,
+                                        mask_zero=True,
+                                        name='char_embedding')(char_ids)
+            char_emb = TimeDistributed(Bidirectional(LSTM(self._char_emb_dim//2)))(char_emb)
+            tok_emb = Concatenate()([tok_emb, char_emb])
+            logger.info('{} :: using char embedding'.format(self.__class__.__name__))
+
+        return inputs, tok_emb
+
+    def build(self):
+        logger.info('{} :: building the bilstm model'.format(self.__class__.__name__))
+
+        inputs, embeddings = self._get_embedding()
+
+        embeddings = Dropout(self._dropout)(embeddings)
+        _temp = Bidirectional(LSTM(units=self._lstm_units, return_sequences=True))(embeddings)
+        _temp = TimeDistributed(Dense(units=self._fully_connected_dim,
+                                      activation=self._fully_connected_act))(_temp)
+
+        if self._use_crf:
+            crf = CRF(self._num_labels, sparse_target=True)
+            loss = crf_loss
+            pred = crf(_temp)
+            logger.info('{} :: using CRF as the final layer'.format(self.__class__.__name__))
+        else:
+            loss = 'categorical_crossentropy'
+            pred = TimeDistributed(Dense(self._num_labels, activation='softmax'))(_temp)
+            logger.info('{} :: using fully connected layer with "softmax activation" and "categorical crossentropy" '
+                        'loss as final layer'.format(self.__class__.__name__))
+
+        model = Model(inputs=inputs, outputs=pred)
+
+        self._model = model
+        self._loss = loss
+
+    def compile(self):
+        self._model.compile(loss=self._loss, optimizer=self._optimizer)
+
+    def fit_generator_(self,
+                       generator=None,
+                       epochs=5,
+                       callbacks=None,
+                       verbose=0,
+                       shuffle=True):
+        """
+        --> fits generator on the self._model variable
+        --> does not stores the fitted model
+        --> returns fitted model
+        :param generator:
+        :param epochs:
+        :param callbacks:
+        :param verbose:
+        :param shuffle:
+        :return:
+        """
+        model = deepcopy(self._model)
+        model.fit_generator(
+            generator=generator,
+            epochs=epochs,
+            callbacks=callbacks,
+            verbose=verbose,
+            shuffle=shuffle
+        )
+
+        return model
+
+
+
+class BiLSTMCRF_(object):
+    """
+    --> A Keras implementation of BiLSTM-CRF for sequence labeling.
+    """
+
+    def __init__(self,
+                 num_labels=None,
+                 word_vocab_size=None,
                  char_vocab_size=None,
                  word_embedding_dim=100,
                  char_embedding_dim=25,
@@ -21,6 +164,7 @@ class BiLSTMCRF(object):
                  char_lstm_size=25,
                  fc_dim=100,
                  fc_act='tanh',
+                 optimizer = 'adam',
                  dropout=0.5,
                  embeddings=None,
                  use_char=True,
@@ -56,10 +200,15 @@ class BiLSTMCRF(object):
         self._use_crf = use_crf
         self._embeddings = embeddings
         self._num_labels = num_labels
-
-    def build(self):
-        # build word embedding
-        logger.info('{} :: building the bilstm model'.format(self.__class__.__name__))
+        self._model = None
+        self._loss = None
+        self._optimizer = optimizer
+,
+    def _get_embedding(self):
+        """
+        --> return embedding layer
+        :return: embedding
+        """
         word_ids = Input(batch_shape=(None, None), dtype=DTYPE['int'], name='word_input')
         inputs = [word_ids]
         if self._embeddings is None:
@@ -88,6 +237,14 @@ class BiLSTMCRF(object):
             word_embeddings = Concatenate()([word_embeddings, char_embeddings])
             logger.info('{} :: using char embedding'.format(self.__class__.__name__))
 
+        return inputs, word_embeddings
+
+    def build(self):
+        # build word embedding
+        logger.info('{} :: building the bilstm model'.format(self.__class__.__name__))
+
+        inputs, word_embeddings = self._get_embedding()
+
         word_embeddings = Dropout(self._dropout)(word_embeddings)
         z = Bidirectional(LSTM(units=self._word_lstm_size, return_sequences=True))(word_embeddings)
         z = Dense(self._fc_dim, activation=self._fc_act)(z)
@@ -105,4 +262,36 @@ class BiLSTMCRF(object):
 
         model = Model(inputs=inputs, outputs=pred)
 
-        return model, loss
+        self._model = model
+        self._loss = loss
+
+    def compile(self):
+        self._model.compile(loss=self._loss, optimizer=self._optimizer)
+
+    def fit_generator(self,
+                      generator=None,
+                      epochs=5,
+                      callbacks=None,
+                      verbose=0,
+                      shuffle=True):
+        """
+        --> fits generator on the self._model variable
+        --> does not stores the fitted model
+        --> returns fitted model
+        :param generator:
+        :param epochs:
+        :param callbacks:
+        :param verbose:
+        :param shuffle:
+        :return:
+        """
+        model = deepcopy(self._model)
+        model.fit_generator_(
+            generator=generator,
+            epochs=epochs,
+            callbacks=callbacks,
+            verbose=verbose,
+            shuffle=shuffle
+        )
+
+        return model

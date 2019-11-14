@@ -1,7 +1,7 @@
 import logging
-from .__paths__ import path_to_logs
+from keras_NER.__paths__ import path_to_logs
 import datetime
-from .__common__ import LOGGER_NAME
+from keras_NER.__common__ import LOGGER_NAME
 
 logger = logging.getLogger(LOGGER_NAME)
 formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(name)s :: %(message)s')

@@ -1,13 +1,14 @@
-from .vocabulary import Vocabulary
-from .__common__ import LOGGER_NAME
+from keras_NER.vocabulary import Vocabulary
+from keras_NER.__common__ import LOGGER_NAME
 import logging
 import math
-from .__utils__ import read_label_file
 logger = logging.getLogger(LOGGER_NAME)
 from gensim.models import KeyedVectors
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
 from keras.utils import Sequence
+from pickle import load, dump
+from keras_NER.__paths__ import path_obj
 
 from collections import namedtuple
 encoded_seq = namedtuple('EncodedSequence', 'tok_ids char_ids lab_ids')
@@ -20,7 +21,7 @@ class SequenceEncoder(object):
 
     def __init__(self,
                  path_to_w2v='',
-                 path_to_label_vocab='',
+                 label_vocab=('O',),
                  char=False,
                  max_seq_len=50,
                  max_word_len=10):
@@ -37,10 +38,10 @@ class SequenceEncoder(object):
         _temp = KeyedVectors.load_word2vec_format(path_to_w2v)
 
         self._word_vocab = Vocabulary(vocab=list(_temp.wv.vocab.keys()))
-        self._word_vectors = _temp.wv
+        self._word_vectors = _temp.wv.vectors
         logger.info('{} :: word vocabulary size = {}'.format(self.__class__.__name__, len(self._word_vocab)))
 
-        labels = read_label_file(path_to_label_vocab, logger)
+        labels = label_vocab
         self._label_to_1hot = OneHotEncoder()
         self._label_to_1hot.fit(np.array([labels + ['<pad>']]).reshape(-1,1))
         logger.info('{} :: label vocabulary size = {}'.format(self.__class__.__name__, len(labels)+1))
@@ -117,6 +118,42 @@ class SequenceEncoder(object):
                 count = 0
                 yield items
                 items = []
+
+    def get_word_embedding(self):
+        return self._word_vectors
+
+    def get_word_vocab_size(self):
+        return len(self._word_vocab)
+
+    def get_char_vocab_size(self):
+        return len(self._char_vocab)
+
+    def get_label_vocab_size(self):
+        return self._label_to_1hot.n_values
+
+    def save(self, name):
+        path = path_obj.joinpath('Saved Objects', 'Sequence Encoders', name)
+
+        if not path.is_dir():
+            path.mkdir(parents=True, exist_ok=True)
+        for att_name, att_val in vars(self).items():
+            dump(att_val, path.joinpath(att_name))
+
+        logger.info('Sequence Encoder saved at {}'.format(path.as_posix()))
+
+    def load(self, name):
+        path = path_obj.joinpath('Saved Objects', 'Sequence Encoders', name)
+
+        if not path.is_dir():
+            logger.error('{} does not exists'.format(name))
+
+        for file_path in path.glob('*'):
+            file_name = file_path.name
+            obj = load(file_path)
+            setattr(self, file_name, obj)
+
+        logger.info('Sequence Encoder {} loaded successfully')
+
 
 
 class NERSequence(Sequence):
