@@ -8,3 +8,5 @@ TF_NER/logs/*
 !TF_NER/logs/.gitkeep
 notes
 test.py
+keras_NER/Saved Objects/*
+!keras_NER/Saved Objects/.gitkeep
